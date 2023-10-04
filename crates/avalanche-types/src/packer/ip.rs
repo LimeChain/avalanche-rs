@@ -38,6 +38,24 @@ impl Packer {
         self.pack_u16(port)
     }
 
+    pub fn pack_ip_with_timestamp(&self, ip_addr: IpAddr, port: u16, timestamp: u64) -> Result<()> {
+        let ip_bytes = match ip_addr {
+            IpAddr::V4(v) => {
+                // Convert IPv4 address to IPv4-mapped IPv6 address
+                let mut ip_bytes = [0u8; 16];
+                ip_bytes[10] = 0xff;
+                ip_bytes[11] = 0xff;
+                let octets = v.octets();
+                ip_bytes[12..16].copy_from_slice(&octets);
+                ip_bytes
+            }
+            IpAddr::V6(v) => v.octets(),
+        };
+        self.pack_bytes(&ip_bytes)?;
+        self.pack_u16(port);
+        self.pack_u64(timestamp)
+    }
+
     /// Unpacks the "IP" in the "offset" position,
     /// and advances the cursor and offset.
     /// ref. "avalanchego/utils/wrappers.Packer.UnpackIP"

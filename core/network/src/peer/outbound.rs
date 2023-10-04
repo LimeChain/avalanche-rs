@@ -1,20 +1,22 @@
 use std::net;
 use std::{
     io::{self, Error, ErrorKind, Read, Write},
-    net::TcpStream,
     sync::Arc,
     time::{Duration, SystemTime},
 };
+use std::net::SocketAddr;
+use std::str::FromStr;
+use std::sync::Mutex;
 
 use avalanche_types::ids::node;
 
 use log::info;
-use pem::Pem;
+use mio::net::TcpStream;
 use rustls::Certificate;
 use rustls::{ClientConfig, ClientConnection, ServerName};
+use crate::tls::client::{CLIENT, TlsClient};
 
 /// ref. <https://pkg.go.dev/github.com/ava-labs/avalanchego/network/peer#Start>
-#[derive(std::clone::Clone)]
 pub struct Connector {
     /// The client configuration of the local/source node for outbound TLS connections.
     pub client_config: Arc<ClientConfig>,
@@ -53,69 +55,39 @@ impl Connector {
     /// ref. <https://pkg.go.dev/github.com/ava-labs/avalanchego/network/peer#NewTLSClientUpgrader>
     pub fn connect(
         &self,
-        peer_ip: net::IpAddr,
-        port: u16,
+        tls_client: Arc<Mutex<TlsClient>>,
         _timeout: Duration,
     ) -> io::Result<Stream> {
-        info!("[rustls] connecting to {}:{}", peer_ip, port);
+        let mut poll = mio::Poll::new().unwrap();
+        let mut events = mio::Events::with_capacity(32);
+        let mut unlocked = tls_client.lock().unwrap();
+        poll.registry()
+            .register(&mut unlocked.socket, CLIENT, mio::Interest::READABLE | mio::Interest::WRITABLE).unwrap();
 
-        // ref. https://doc.rust-lang.org/std/net/enum.SocketAddr.html
-        let sock_addr = format!("{}:{}", peer_ip, port);
+        drop(unlocked);
+        // Start an event loop.
+        loop {
+            // Poll Mio for events, blocking until we get an event.
+            poll.poll(&mut events, None)?;
 
-        // This is now possible with rustls v0.21.0+
-        let server_name: ServerName = ServerName::try_from(peer_ip.to_string().as_ref()).unwrap();
-        let mut conn =
-            rustls::ClientConnection::new(self.client_config.clone(), server_name).unwrap();
-        let mut sock = TcpStream::connect(sock_addr.clone()).unwrap();
-        let mut tls = rustls::Stream::new(&mut conn, &mut sock);
-
-        let binding = format!("GET / HTTP/1.1\r\nHost: {}:{}\r\nConnection: close\r\nAccept-Encoding: identity\r\n\r\n", peer_ip, port);
-        let header = binding.as_bytes();
-        // This is a dummy write to ensure that the certificate data is transmitted.
-        // Without this GET we get an error: Error: Custom { kind: NotConnected, error: "no peer certificate found" }
-        match tls.write_all(header) {
-            Ok(_) => {
-                println!("\n\n WROTE REQUEST\n\n");
+            // Process each event.
+            for event in events.iter() {
+                // We can use the token we previously provided to `register` to
+                // determine for which socket the event is.
+                match event.token() {
+                    CLIENT => {
+                        info!("client event!");
+                        let mut tls_client = tls_client.lock().unwrap();
+                        tls_client.ready(event);
+                        tls_client.reregister(poll.registry());
+                        drop(tls_client);
+                        break;
+                    }
+                    // We don't expect any events with tokens other than those we provided.
+                    _ => unreachable!(),
+                }
             }
-            Err(e) => {
-                println!("failed to write request: {}", e);
-            }
-        };
-
-        info!("retrieving peer certificates...");
-        let peer_certs = conn.peer_certificates();
-        if peer_certs.is_none() {
-            return Err(Error::new(
-                ErrorKind::NotConnected,
-                "no peer certificate found",
-            ));
         }
-
-        // The certificate details are used to establish node identity.
-        // See https://docs.avax.network/specs/cryptographic-primitives#tls-certificates.
-        // The avalanchego certs are intentionally NOT signed by a legitimate CA.
-        let peer_certs = peer_certs.unwrap();
-        let peer_certificate = peer_certs[0].clone();
-        let peer_node_id = node::Id::from_cert_der_bytes(&peer_certificate.0)?;
-        info!(
-            "successfully connected to {} (total {} certificates, first cert {}-byte)",
-            peer_node_id,
-            peer_certs.len(),
-            peer_certificate.0.len(),
-        );
-
-        Ok(Stream {
-            addr: sock_addr,
-            conn,
-            peer_certificate: peer_certificate.clone(),
-            peer_node_id,
-
-            #[cfg(feature = "pem_encoding")]
-            peer_certificate_pem: pem::encode(&Pem::new(
-                "CERTIFICATE".to_string(),
-                peer_certificate.0,
-            )),
-        })
     }
 }
 

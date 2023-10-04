@@ -20,13 +20,14 @@ hyper-rustls = "0.24.1"
 rustls-native-certs = "0.6.3"
 hyper = { version = "0.14.27", features = ["full"], optional = true }
 tokio-rustls = { version = "0.24.1", optional = true }
-
+mio={version = "0.8.8", features=["os-poll", "net"]}
 # for feature "pem"
-pem = { version = "3.0.0", optional = true } # https://github.com/jcreekmore/pem-rs
+pem = { version = "3.0.0", optional = true }
+serde = "1.0.188" # https://github.com/jcreekmore/pem-rs
+random-manager = "0.0.5"
 
 [dev-dependencies]
 env_logger = "0.10.0"
-random-manager = "0.0.5"
 tokio = { version = "1.32.0", features = ["full"] }
 tracing = "0.1.37"
 tracing-subscriber = "0.3.17"
