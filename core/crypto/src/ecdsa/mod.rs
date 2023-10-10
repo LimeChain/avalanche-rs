@@ -1,5 +1,4 @@
 use log::info;
-use openssl::sha::sha256;
 use ring::signature;
 use ring::signature::{ECDSA_P256_SHA256_ASN1_SIGNING, EcdsaKeyPair, Signature};
 use thiserror::Error;
@@ -10,18 +9,16 @@ pub fn verify_signature(public_key: &[u8], msg: &[u8], signature: &[u8]) -> Resu
         signature::UnparsedPublicKey::new(&signature::ECDSA_P256_SHA256_ASN1,
                                           public_key);
 
-    match public_key.verify(msg, &signature) {
+    match public_key.verify(&msg, &signature) {
         Ok(_) => Ok(()),
         Err(e) => Err(EcdsaError::SignOrVerify(e))
     }
 }
 
 pub fn sign_message(message: &[u8], private_key: &[u8]) -> Result<Signature, EcdsaError> {
-    let hashed_msg = sha256(message);
     let key_pair = EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_ASN1_SIGNING, private_key, secure_random())?;
-    let sig = key_pair.sign(secure_random(), &hashed_msg)?;
+    let sig = key_pair.sign(secure_random(), &message)?;
     info!("message is: {:?}", hex::encode(message));
-    info!("hash is: {:?}", hex::encode(hashed_msg));
     info!("sig is: {:?}", hex::encode(sig.as_ref()));
     Ok(sig)
 }

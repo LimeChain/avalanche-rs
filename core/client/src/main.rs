@@ -14,6 +14,7 @@ use network::tls::client::{TlsClient};
 use hex;
 use avalanche_types::packer::ip::IP_LEN;
 use avalanche_types::packer::Packer;
+use crypto::ecdsa::verify_signature;
 
 fn main() {
     let env = Env::default()
@@ -59,9 +60,16 @@ fn start() -> io::Result<()> {
     let packed = packer.take_bytes();
     let (private_key, cert) =
         cert_manager::x509::load_pem_key_cert_to_der(cert.key_path.as_ref(), cert.cert_path.as_ref())?;
-
+    info!("cert is {}", hex::encode(&cert.0));
     info!("private key is {}", hex::encode(private_key.0.clone()));
     let signature = ecdsa::sign_message(packed.as_ref(), &private_key.0).expect("failed to sign message");
+    let x509_cert = x509_certificate::X509Certificate::from_der(&cert.0).expect("failed to parse cert");
+
+    info!("public key is: {}", hex::encode(x509_cert.public_key_data().as_ref()));
+
+    // if verify_signature(x509_cert.public_key_data().as_ref(), packed.as_ref(), signature.as_ref()).is_err() {
+    //     panic!("failed to verify signature");
+    // }
 
     let sig_bytes: Box<[u8]> = Box::from(signature.as_ref());
     let msg = message::version::Message::default()

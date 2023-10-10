@@ -5,6 +5,8 @@ pub struct Certificate {
     pub key_path: String,
     pub cert_path: String,
 }
+
+// Generate x509 certificate and PKSC8 private key
 pub fn generate_certificate() -> Result<Certificate, std::io::Error> {
     let client_key_path = random_manager::tmp_path(10, None)?;
     let client_cert_path = random_manager::tmp_path(10, None)?;
