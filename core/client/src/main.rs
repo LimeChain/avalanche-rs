@@ -48,7 +48,7 @@ fn start() -> io::Result<()> {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let server_name: ServerName = ServerName::try_from(peer.ip.ip().to_string().as_ref()).unwrap();
     let sock = TcpStream::connect(peer.ip).unwrap();
-    let tls_client = Arc::new(Mutex::new(TlsClient::new(sock, server_name, connector.client_config.clone())));
+    let tls_client = Arc::new(Mutex::new(TlsClient::new(sock, server_name, connector.client_config.clone(), 1)));
 
     let tls_client_clone = tls_client.clone();
     rt.spawn( async move {
