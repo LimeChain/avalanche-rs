@@ -4,6 +4,9 @@ use std::{process};
 use log::info;
 
 use mio::net::TcpStream;
+use avalanche_types::message;
+use avalanche_types::message::version::Message;
+use avalanche_types::proto::p2p;
 
 pub const CLIENT: mio::Token = mio::Token(0);
 
@@ -107,7 +110,11 @@ impl TlsClient {
                 .reader()
                 .read_exact(&mut plaintext)
                 .unwrap();
-            
+
+            let real_message = plaintext[4..].to_vec();
+            let version = Message::deserialize(real_message).expect("failed to deserialize version message");
+            info!("Received version message: {:?}", version);
+            validate_version_message(version);
         }
 
         // If that fails, the peer might have started a clean TLS-level
@@ -180,4 +187,9 @@ impl Read for TlsClient {
     fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
         self.tls_conn.reader().read(bytes)
     }
+}
+
+fn validate_version_message(msg: Message) {
+    let sig = msg.msg.sig;
+
 }

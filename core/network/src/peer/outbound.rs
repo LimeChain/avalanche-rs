@@ -14,6 +14,7 @@ use log::info;
 use mio::net::TcpStream;
 use rustls::Certificate;
 use rustls::{ClientConfig, ClientConnection, ServerName};
+use x509_certificate::X509Certificate;
 use crate::tls::client::{CLIENT, TlsClient};
 
 /// ref. <https://pkg.go.dev/github.com/ava-labs/avalanchego/network/peer#Start>
@@ -132,6 +133,7 @@ pub struct Stream {
     pub conn: ClientConnection,
 
     pub peer_certificate: Certificate,
+    pub peer_x509_certificate: X509Certificate,
     pub peer_node_id: node::Id,
 
     #[cfg(feature = "pem")]

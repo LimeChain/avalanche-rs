@@ -19,12 +19,9 @@ avalanche-types = {path = "../../crates/avalanche-types"}
 random-manager = "0.0.5"
 log = "0.4.20"
 env_logger = "0.10.0"
-rustls-pemfile = "1.0.3"
 rustls = "0.21.7"
 tokio = "1.32.0"
 mio = "0.8.8"
 hex = "0.4.3"
 bytes = "1.5.0"
 cert-manager = "0.0.10"
-
-

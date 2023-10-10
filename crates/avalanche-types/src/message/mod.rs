@@ -1,4 +1,8 @@
 //! Definitions of messages that can be sent between nodes.
+use std::io;
+use std::io::{Error, ErrorKind};
+use std::net::IpAddr;
+
 pub mod accepted;
 pub mod accepted_frontier;
 pub mod accepted_state_summary;
@@ -36,4 +40,27 @@ pub fn ip_addr_to_bytes(ip_addr: std::net::IpAddr) -> Vec<u8> {
         }
         std::net::IpAddr::V6(v) => v.octets().to_vec(),
     }
+}
+
+pub fn bytes_to_ip_addr(bytes: Vec<u8>) -> io::Result<IpAddr> {
+    let bytes: [u8; 16] = match bytes.as_slice() {
+        [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p] => {
+            [
+                *a, *b, *c, *d, *e, *f, *g, *h, *i, *j, *k, *l, *m, *n, *o, *p
+            ]
+        },
+        _ => {
+            log::warn!(
+                    "Peer IP address is not 16 bytes long"
+                );
+            return Err(Error::new(ErrorKind::Other, "Peer IP address is not 16 bytes long"));
+        }
+    };
+
+    let ip_addr = match IpAddr::from(bytes) {
+        IpAddr::V4(v) => IpAddr::V4(v),
+        IpAddr::V6(v) => IpAddr::V6(v),
+    };
+
+    Ok(ip_addr)
 }

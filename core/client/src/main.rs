@@ -61,9 +61,9 @@ fn start() -> io::Result<()> {
 
     let packer = Packer::new(IP_LEN + 8, 0);
     // packer.pack_ip_with_timestamp(IpAddr::V4(Ipv4Addr::from_str("54.94.43.49").unwrap()), 9651, 1695411469).expect("failed to pack ip");
-    packer.pack_ip_with_timestamp(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 9651, now_unix).expect("failed to pack ip");
+    packer.pack_ip_with_timestamp(IpAddr::V4(Ipv4Addr::LOCALHOST), 9651, now_unix).expect("failed to pack ip");
     let packed = packer.take_bytes();
-    let (private_key, _) =
+    let (private_key, cert) =
         cert_manager::x509::load_pem_key_cert_to_der(cert.key_path.as_ref(), cert.cert_path.as_ref())?;
 
     info!("private key is {}", hex::encode(private_key.0.clone()));
@@ -73,7 +73,7 @@ fn start() -> io::Result<()> {
     let msg = message::version::Message::default()
         .network_id(1)
         .my_time(now_unix)
-        .ip_addr(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)))
+        .ip_addr(IpAddr::V4(Ipv4Addr::LOCALHOST))
         .ip_port(9651)
         .my_version("avalanche/1.10.11".to_string())
         .my_version_time(now_unix)

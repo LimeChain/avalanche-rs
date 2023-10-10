@@ -1,5 +1,15 @@
+use std::error::Error;
+use std::net::IpAddr;
+use std::ptr::null;
+use std::time::SystemTime;
+use avalanche_types::message;
+use avalanche_types::message::bytes_to_ip_addr;
+use crate::peer::ipaddr::{SignedIp, UnsignedIp};
+
 pub mod inbound;
 pub mod outbound;
+pub mod ipaddr;
+pub mod staking;
 
 /// Represents a remote peer from the local node.
 /// ref. <https://pkg.go.dev/github.com/ava-labs/avalanchego/network/peer#Start>
@@ -7,14 +17,89 @@ pub struct Peer {
     pub stream: outbound::Stream,
 
     pub ready: bool,
+    pub network_id: u32,
+    pub ip: Option<SignedIp>,
 }
 
 impl Peer {
-    pub fn new(stream: outbound::Stream) -> Self {
+    pub fn new(stream: outbound::Stream, network_id: u32) -> Self {
         Self {
             stream,
             ready: false,
+            network_id,
+            ip: None,
         }
+    }
+
+    pub fn handle_version(&mut self, msg: message::version::Message)  {
+        if msg.msg.network_id != self.network_id {
+            log::warn!(
+                "Peer network ID {} doesn't match our network ID {}",
+                msg.msg.network_id,
+                self.network_id
+            );
+            return;
+        }
+
+        let now_unix = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("unexpected None duration_since")
+            .as_secs();
+        let time_diff = msg.msg.my_time.abs_diff(now_unix);
+        if time_diff > 60 {
+            log::warn!(
+                "Peer time is off by {} seconds",
+                time_diff
+            );
+            return;
+        }
+
+        // Skip version compatibility check for now
+
+        if msg.msg.my_version_time.abs_diff(now_unix) > 60 {
+            log::warn!(
+                "Peer version time is off by {} seconds",
+                msg.msg.my_version_time.abs_diff(now_unix)
+            );
+            return;
+        }
+
+        // Skip subnet handling for now
+        if msg.msg.ip_addr.len() != 16 {
+            log::warn!(
+                "Peer IP address is not 16 bytes long"
+            );
+            return;
+        }
+
+        let ip_addr = match bytes_to_ip_addr(msg.msg.ip_addr.to_vec()) {
+            Ok(ip_addr) => ip_addr,
+            Err(e) => {
+                log::warn!("Peer IP address is invalid: {}", e);
+                return
+            }
+        };
+
+        self.ip = Some(SignedIp::new(
+            UnsignedIp::new(
+                ip_addr,
+                msg.msg.ip_port as u16,
+                msg.msg.my_version_time
+            ),
+            msg.msg.sig.to_vec(),
+        ));
+
+        match self.ip.as_mut().unwrap().verify(&self.stream.peer_x509_certificate) {
+            Ok(_) => {
+                log::info!("Peer IP address verified");
+            },
+            Err(e) => {
+                log::warn!("Peer IP address verification failed: {}", e);
+                return
+            }
+        };
+
+        // TODO: Send peer list message
     }
 }
 
