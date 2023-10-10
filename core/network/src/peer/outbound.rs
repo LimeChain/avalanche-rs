@@ -79,7 +79,7 @@ impl Connector {
                         info!("client event!");
                         let mut tls_client = tls_client.lock().unwrap();
                         tls_client.ready(event);
-                        tls_client.reregister(poll.registry());
+                        tls_client.reregister(poll.registry())?;
                         drop(tls_client);
                         break;
                     }
