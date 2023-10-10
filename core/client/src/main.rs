@@ -1,24 +1,17 @@
-use std::cell::Cell;
-use std::collections::HashMap;
-use std::fs::File;
 use std::io;
-use std::io::Write;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-use std::ops::Deref;
-use std::str::FromStr;
+use std::net::{IpAddr, Ipv4Addr};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
-use log::{info, trace};
+use log::{info};
 use env_logger::Env;
 use mio::net::TcpStream;
 use rustls::ServerName;
 use avalanche_types::message;
 use bootstrap::Bootstrappers;
-use crypto::rsa;
-use network::peer::{inbound, outbound, Peer};
-use network::tls::client::{CLIENT, TlsClient};
+use crypto::{ecdsa};
+use network::peer::{outbound};
+use network::tls::client::{TlsClient};
 use hex;
-use rustls::sign::CertifiedKey;
 use avalanche_types::packer::ip::IP_LEN;
 use avalanche_types::packer::Packer;
 
@@ -62,14 +55,13 @@ fn start() -> io::Result<()> {
         .as_secs();
 
     let packer = Packer::new(IP_LEN + 8, 0);
-    // packer.pack_ip_with_timestamp(IpAddr::V4(Ipv4Addr::from_str("54.94.43.49").unwrap()), 9651, 1695411469).expect("failed to pack ip");
     packer.pack_ip_with_timestamp(IpAddr::V4(Ipv4Addr::LOCALHOST), 9651, now_unix).expect("failed to pack ip");
     let packed = packer.take_bytes();
     let (private_key, cert) =
         cert_manager::x509::load_pem_key_cert_to_der(cert.key_path.as_ref(), cert.cert_path.as_ref())?;
 
     info!("private key is {}", hex::encode(private_key.0.clone()));
-    let signature = rsa::sign_message(packed.as_ref(), &private_key.0).expect("failed to sign message");
+    let signature = ecdsa::sign_message(packed.as_ref(), &private_key.0).expect("failed to sign message");
 
     let sig_bytes: Box<[u8]> = Box::from(signature.as_ref());
     let msg = message::version::Message::default()
@@ -82,36 +74,8 @@ fn start() -> io::Result<()> {
         .sig(sig_bytes.to_vec())
         .tracked_subnets(Vec::new());
 
-    let mut msg = msg.serialize().expect("failed serialize");
-    prepend_length(&mut msg);
+    let msg = msg.serialize().expect("failed serialize");
     info!("Sending version message: {}", hex::encode(msg.clone()));
     tls_client.lock().expect("Failed to obtain lock").send_version_message(&msg).expect("failed to write");
     Ok(())
-}
-
-fn prepend_length(vec: &mut Vec<u8>) {
-    let length = vec.len();
-    let mut length_bytes = vec![];
-
-    // Convert the length to bytes (big-endian byte order)
-    for i in (0..std::mem::size_of::<usize>()).rev() {
-        length_bytes.push(((length >> (i * 8)) & 0xFF) as u8);
-    }
-
-    // Insert the length bytes at the beginning of the vector
-    vec.splice(0..0, length_bytes);
-}
-
-#[test]
-fn test_pack_ip() {
-    let packer = Packer::new(IP_LEN + 8, 0);
-    let packed = packer.pack_ip_with_timestamp(IpAddr::V4(Ipv4Addr::from_str("54.94.43.49").unwrap()), 9651, 1696840122).expect("failed to pack ip");
-    println!("packed ip is {}", hex::encode(packer.take_bytes().as_ref()));
-}
-
-#[test]
-fn test_hashing() {
-    //00000000000000000000ffff365e2b3125b300000000650ded0d
-    let hashed = "";
-    assert_eq!("f9bdc1aa480af190c3e90397ad4f68d776a4871badff6bb4ecd25951ef65ad60", hashed)
 }

@@ -9,10 +9,10 @@ pub fn check_signature(cert: &X509Certificate, msg: &[u8], signature: &[u8]) -> 
     let alg = cert.signature_algorithm().expect("failed to get signature algorithm");
     match alg {
         x509_certificate::SignatureAlgorithm::RsaSha256 => {
-            rsa::verify_pkcs1v15_signature(cert, msg, signature);
+            rsa::verify_pkcs1v15_signature(cert.public_key_data().as_ref(), msg, signature);
         }
         x509_certificate::SignatureAlgorithm::EcdsaSha256 => {
-            ecdsa::verify_ecdsa_signature(cert, msg, signature);
+            ecdsa::verify_signature(cert.public_key_data().as_ref(), msg, signature);
         }
         _ => {
             return Err(io::Error::new(io::ErrorKind::Other, "unsupported signature algorithm"));

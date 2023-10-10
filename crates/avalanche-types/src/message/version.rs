@@ -2,6 +2,7 @@ use std::io::{self, Error, ErrorKind};
 
 use crate::{ids, message, proto::pb::p2p};
 use prost::Message as ProstMessage;
+use crate::message::prepend_message_length;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Message {
@@ -93,7 +94,9 @@ impl Message {
         };
         let encoded = ProstMessage::encode_to_vec(&msg);
         if !self.gzip_compress {
-            return Ok(encoded);
+            let mut msg = ProstMessage::encode_to_vec(&msg);
+            prepend_message_length(&mut msg);
+            return Ok(msg);
         }
 
         let uncompressed_len = encoded.len();
@@ -116,8 +119,9 @@ impl Message {
                 compressed_len - uncompressed_len
             );
         }
-
-        Ok(ProstMessage::encode_to_vec(&msg))
+        let mut msg = ProstMessage::encode_to_vec(&msg);
+        prepend_message_length(&mut msg);
+        Ok(msg)
     }
 
     pub fn deserialize(d: impl AsRef<[u8]>) -> io::Result<Self> {

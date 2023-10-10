@@ -64,3 +64,17 @@ pub fn bytes_to_ip_addr(bytes: Vec<u8>) -> io::Result<IpAddr> {
 
     Ok(ip_addr)
 }
+
+fn prepend_message_length(message: &mut Vec<u8>) {
+    let length = message.len();
+    let mut length_bytes = vec![];
+
+    // Convert the length to bytes (big-endian byte order)
+    for i in (0..std::mem::size_of::<usize>()).rev() {
+        length_bytes.push(((length >> (i * 8)) & 0xFF) as u8);
+    }
+
+    // Insert the length bytes at the beginning of the vector
+    message.splice(0..0, length_bytes);
+}
+
