@@ -1,12 +1,15 @@
-use std::io::{self, Read, Write};
+use std::io::{self, Error, ErrorKind, Read, Write};
 use std::sync::Arc;
 use std::{process};
-use log::info;
+use std::time::SystemTime;
+use log::{info, warn};
 
 use mio::net::TcpStream;
-use avalanche_types::message;
+use x509_certificate::X509Certificate;
+use avalanche_types::ids::node;
+use avalanche_types::message::bytes_to_ip_addr;
 use avalanche_types::message::version::Message;
-use avalanche_types::proto::p2p;
+use crate::peer::ipaddr::{SignedIp, UnsignedIp};
 
 pub const CLIENT: mio::Token = mio::Token(0);
 
@@ -18,6 +21,11 @@ pub struct TlsClient {
     clean_closure: bool,
     received_first_message: bool,
     pub tls_conn: rustls::ClientConnection,
+    network_id: u32,
+    x509_certificate: Option<X509Certificate>,
+    ip: Option<SignedIp>,
+    peer_node_id: Option<node::Id>,
+    peer_cert: Option<rustls::Certificate>,
 }
 
 impl TlsClient {
@@ -25,6 +33,7 @@ impl TlsClient {
         sock: TcpStream,
         server_name: rustls::ServerName,
         cfg: Arc<rustls::ClientConfig>,
+        network_id: u32,
     ) -> Self {
         Self {
             socket: sock,
@@ -32,6 +41,11 @@ impl TlsClient {
             clean_closure: false,
             received_first_message: false,
             tls_conn: rustls::ClientConnection::new(cfg, server_name).unwrap(),
+            network_id,
+            x509_certificate: None,
+            ip: None,
+            peer_node_id: None,
+            peer_cert: None,
         }
     }
 
@@ -111,10 +125,11 @@ impl TlsClient {
                 .read_exact(&mut plaintext)
                 .unwrap();
 
+            // TODO: Improve length removal
             let real_message = plaintext[4..].to_vec();
             let version = Message::deserialize(real_message).expect("failed to deserialize version message");
             info!("Received version message: {:?}", version);
-            validate_version_message(version);
+            self.handle_version(version);
         }
 
         // If that fails, the peer might have started a clean TLS-level
@@ -172,6 +187,118 @@ impl TlsClient {
     fn is_closed(&self) -> bool {
         self.closing
     }
+
+
+    pub fn handle_version(&mut self, msg: Message)  {
+        // TODO: There must be a better(earlier) time to extract the certificate data
+        if self.handle_certificate().is_err() {
+            warn!("Failed to handle peer certificate");
+            return;
+        }
+        if msg.msg.network_id != self.network_id {
+            warn!(
+                "Peer network ID {} doesn't match our network ID {}",
+                msg.msg.network_id,
+                self.network_id
+            );
+            return;
+        }
+
+        let now_unix = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("unexpected None duration_since")
+            .as_secs();
+        let time_diff = msg.msg.my_time.abs_diff(now_unix);
+        if time_diff > 60 {
+            warn!(
+                "Peer time is off by {} seconds",
+                time_diff
+            );
+            return;
+        }
+
+        // Skip version compatibility check for now
+
+        if msg.msg.my_version_time.abs_diff(now_unix) > 60 {
+            warn!(
+                "Peer version time is off by {} seconds",
+                msg.msg.my_version_time.abs_diff(now_unix)
+            );
+            return;
+        }
+
+        // Skip subnet handling for now
+        if msg.msg.ip_addr.len() != 16 {
+            warn!(
+                "Peer IP address is not 16 bytes long"
+            );
+            return;
+        }
+
+        let ip_addr = match bytes_to_ip_addr(msg.msg.ip_addr.to_vec()) {
+            Ok(ip_addr) => ip_addr,
+            Err(e) => {
+                warn!("Peer IP address is invalid: {}", e);
+                return
+            }
+        };
+
+        self.ip = Some(SignedIp::new(
+            UnsignedIp::new(
+                ip_addr,
+                msg.msg.ip_port as u16,
+                msg.msg.my_version_time
+            ),
+            msg.msg.sig.to_vec(),
+        ));
+        if let Some(cert) = &self.x509_certificate {
+            if let Some(ip) = self.ip.as_mut() {
+                match ip.verify(cert) {
+                    Ok(_) => {
+                        info!("Peer IP address verified");
+                    },
+                    Err(e) => {
+                        warn!("Peer IP address verification failed: {}", e);
+                        return
+                    }
+                };
+            } else {
+                warn!("Peer IP address verification failed: no IP address");
+                return
+            }
+        } else {
+            warn!("Peer IP address verification failed: no certificate");
+            return
+        }
+
+        // TODO: Send peer list message
+    }
+
+    fn handle_certificate(&mut self) -> io::Result<()> {
+        info!("retrieving peer certificates...");
+        let peer_certs = self.tls_conn.peer_certificates();
+        if peer_certs.is_none() {
+            return Err(Error::new(
+                ErrorKind::NotConnected,
+                "no peer certificate found",
+            ));
+        }
+
+        // The certificate details are used to establish node identity.
+        // See https://docs.avax.network/specs/cryptographic-primitives#tls-certificates.
+        // The avalanchego certs are intentionally NOT signed by a legitimate CA.
+        let peer_certs = peer_certs.unwrap();
+        let peer_certificate = peer_certs[0].clone();
+        let peer_node_id = node::Id::from_cert_der_bytes(&peer_certificate.0)?;
+        let x509_certificate = X509Certificate::from_der(&peer_certificate.0).expect("failed to parse certificate");
+
+        info!("peer node ID: {}", peer_node_id);
+
+        self.peer_node_id = Some(peer_node_id);
+        self.peer_cert = Some(peer_certificate);
+        self.x509_certificate = Some(x509_certificate);
+        Ok(())
+    }
 }
 impl Write for TlsClient {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
@@ -187,9 +314,4 @@ impl Read for TlsClient {
     fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
         self.tls_conn.reader().read(bytes)
     }
-}
-
-fn validate_version_message(msg: Message) {
-    let sig = msg.msg.sig;
-
 }

@@ -1,6 +1,5 @@
+use std::io;
 use std::net::IpAddr;
-use rustls::Certificate;
-use tokio::io;
 use x509_certificate::X509Certificate;
 use avalanche_types::packer::ip::IP_LEN;
 use avalanche_types::packer::Packer;
@@ -37,7 +36,9 @@ impl SignedIp {
 
     pub fn verify(&self, cert: &X509Certificate) -> io::Result<()> {
         let packer = Packer::new(IP_LEN + 8, 0);
-        packer.pack_ip_with_timestamp(self.unsigned_ip.ip, self.unsigned_ip.port, self.unsigned_ip.timestamp)?;
+        if packer.pack_ip_with_timestamp(self.unsigned_ip.ip, self.unsigned_ip.port, self.unsigned_ip.timestamp).is_err() {
+            return Err(io::Error::new(io::ErrorKind::Other, "failed to pack ip"));
+        }
         let packed = packer.take_bytes();
         staking::check_signature(cert, packed.as_ref(), self.signature.as_ref())?;
         Ok(())

@@ -1,26 +1,28 @@
-use std::net;
 use std::{
     io::{self, Error, ErrorKind, Read, Write},
     sync::Arc,
     time::{Duration, SystemTime},
 };
-use std::net::SocketAddr;
-use std::str::FromStr;
 use std::sync::Mutex;
 
 use avalanche_types::ids::node;
 
 use log::info;
-use mio::net::TcpStream;
 use rustls::Certificate;
 use rustls::{ClientConfig, ClientConnection, ServerName};
 use x509_certificate::X509Certificate;
+use avalanche_types::message;
+use avalanche_types::message::bytes_to_ip_addr;
+use crate::peer::ipaddr::{SignedIp, UnsignedIp};
 use crate::tls::client::{CLIENT, TlsClient};
 
 /// ref. <https://pkg.go.dev/github.com/ava-labs/avalanchego/network/peer#Start>
 pub struct Connector {
     /// The client configuration of the local/source node for outbound TLS connections.
     pub client_config: Arc<ClientConfig>,
+    pub network_id: u32,
+    pub x509_certificate: Option<X509Certificate>,
+    pub ip: Option<SignedIp>,
 }
 
 impl Connector {
@@ -49,6 +51,9 @@ impl Connector {
 
         Ok(Self {
             client_config: Arc::new(config),
+            network_id: 1,
+            x509_certificate: None,
+            ip: None,
         })
     }
 
@@ -133,7 +138,6 @@ pub struct Stream {
     pub conn: ClientConnection,
 
     pub peer_certificate: Certificate,
-    pub peer_x509_certificate: X509Certificate,
     pub peer_node_id: node::Id,
 
     #[cfg(feature = "pem")]

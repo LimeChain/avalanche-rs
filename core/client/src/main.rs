@@ -15,7 +15,7 @@ use rustls::ServerName;
 use avalanche_types::message;
 use bootstrap::Bootstrappers;
 use crypto::rsa;
-use network::peer::{inbound, outbound};
+use network::peer::{inbound, outbound, Peer};
 use network::tls::client::{CLIENT, TlsClient};
 use hex;
 use rustls::sign::CertifiedKey;
@@ -29,8 +29,10 @@ fn main() {
 
     env_logger::init_from_env(env);
 
-    start().expect("failed to start client");
-    info!("Done!");
+    match start() {
+        Ok(_) => info!("Client started"),
+        Err(e) => info!("Client failed to start: {}", e)
+    }
 }
 
 /*

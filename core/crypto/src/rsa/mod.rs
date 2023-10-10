@@ -24,16 +24,6 @@ pub fn sign_message(message: &[u8], private_key: &[u8]) -> Result<Signature, Rsa
     Ok(sig)
 }
 
-// pub fn sign_message_2(message: &[u8], private_key: &[u8]) -> Result<EcdsaSig, Error> {
-//     let hashed_msg = compute_hash256(message);
-//     let key = signature::RsaKeyPair::from_pkcs8(private_key).expect("fail");
-//     let sig = key.sign(, secure_random(), &hashed_msg).expect("fail")
-//     info!("message is: {:?}", hex::encode(message));
-//     info!("hash is: {:?}", hex::encode(hashed_msg));
-//     info!("sig is: {:?}", hex::encode(&sig.to_der().unwrap()));
-//     Ok(sig)
-// }
-
 fn compute_hash256(buf: &[u8]) -> [u8; 32] {
     let mut result = [0u8; 32];
     let sha256_digest = digest::digest(&digest::SHA256, buf);
