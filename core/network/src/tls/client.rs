@@ -41,7 +41,7 @@ impl TlsClient {
         }
 
         if ev.is_writable() {
-            self.do_write();
+            let _ = self.do_write();
         }
 
         if self.is_closed() {
@@ -118,33 +118,30 @@ impl TlsClient {
         }
     }
 
-    pub fn do_write(&mut self) {
-        self.tls_conn
-            .write_tls(&mut self.socket)
-            .unwrap();
+    pub fn do_write(&mut self) -> io::Result<()> {
+        while self.tls_conn.wants_write() {
+            self.tls_conn.write_tls(&mut self.socket)?;
+        }
+        Ok(())
     }
 
     /// Registers self as a 'listener' in mio::Registry
-    fn register(&mut self, registry: &mio::Registry) {
+    fn register(&mut self, registry: &mio::Registry) -> io::Result<()> {
         let interest = self.event_set();
-        registry
-            .register(&mut self.socket, CLIENT, interest)
-            .unwrap();
+        registry.register(&mut self.socket, CLIENT, interest)
     }
 
     /// Reregisters self as a 'listener' in mio::Registry.
-    pub(crate) fn reregister(&mut self, registry: &mio::Registry) {
+    pub(crate) fn reregister(&mut self, registry: &mio::Registry) -> io::Result<()> {
         let interest = self.event_set();
-        registry
-            .reregister(&mut self.socket, CLIENT, interest)
-            .unwrap();
+        registry.reregister(&mut self.socket, CLIENT, interest)
     }
 
     /// Sends a version message over the TLS connection.
     pub fn send_version_message(&mut self, version_message: &[u8]) -> io::Result<usize> {
         info!("Writing version message to stream");
         self.tls_conn.writer().write_all(version_message)?;
-        self.do_write(); // Flush the TLS data to the socket
+        self.do_write()?; // Flush the TLS data to the socket
         info!("Flushed message to stream");
         Ok(version_message.len())
     }

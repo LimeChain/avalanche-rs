@@ -37,17 +37,15 @@ fn main() {
  * Starts the client
  */
 fn start() -> io::Result<()> {
-    let bootstrappers: Bootstrappers = bootstrap::read_boostrap_json();
+    let bootstrappers = Bootstrappers::read_boostrap_json();
     // TODO: Add cli parameter for chain selection
     let peer  = bootstrappers.mainnet.get(0).expect("failed to get peer");
     let cert = network::tls::certificate::generate_certificate().expect("failed to generate certificate");
     let connector = outbound::Connector::new_from_pem(&cert.key_path, &cert.cert_path)?;
 
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let sock_addr = format!("{}:{}",peer.ip, peer.port);
-    let sock_addr = SocketAddr::from_str(&sock_addr).unwrap();
-    let server_name: ServerName = ServerName::try_from(peer.ip.to_string().as_ref()).unwrap();
-    let sock = TcpStream::connect(sock_addr).unwrap();
+    let server_name: ServerName = ServerName::try_from(peer.ip.ip().to_string().as_ref()).unwrap();
+    let sock = TcpStream::connect(peer.ip).unwrap();
     let tls_client = Arc::new(Mutex::new(TlsClient::new(sock, server_name, connector.client_config.clone())));
 
     let tls_client_clone = tls_client.clone();

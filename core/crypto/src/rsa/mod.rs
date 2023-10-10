@@ -1,4 +1,4 @@
-use std::fmt::Error;
+use thiserror::Error;
 use lazy_static::lazy_static;
 use log::info;
 use ring::digest;
@@ -6,11 +6,10 @@ use ring::digest;
 use ring::rand::{SecureRandom, SystemRandom};
 use ring::signature::{ECDSA_P256_SHA256_ASN1_SIGNING, EcdsaKeyPair, Signature}; // requires 'getrandom' feature
 
-pub fn sign_message(message: &[u8], private_key: &[u8]) -> Result<Signature, Error> {
+pub fn sign_message(message: &[u8], private_key: &[u8]) -> Result<Signature, RsaError> {
     let hashed_msg = compute_hash256(message);
-    let key_pair = EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_ASN1_SIGNING, private_key, secure_random())
-        .expect("fail");
-    let sig = key_pair.sign(secure_random(), &hashed_msg).expect("fail");
+    let key_pair = EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_ASN1_SIGNING, private_key, secure_random())?;
+    let sig = key_pair.sign(secure_random(), &hashed_msg)?;
     info!("message is: {:?}", hex::encode(message));
     info!("hash is: {:?}", hex::encode(hashed_msg));
     info!("sig is: {:?}", hex::encode(sig.as_ref()));
@@ -31,4 +30,12 @@ fn secure_random() -> &'static dyn SecureRandom {
         static ref RANDOM: SystemRandom = SystemRandom::new();
     }
     RANDOM.deref()
+}
+
+#[derive(Error, Debug)]
+pub enum RsaError {
+    #[error("Failed to create a EcdsaeKeyPair")]
+    EcdsaeKeyPairRejected(#[from] ring::error::KeyRejected),
+    #[error("Failed to sign key")]
+    Signing(#[from] ring::error::Unspecified)
 }
