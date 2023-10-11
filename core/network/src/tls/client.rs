@@ -7,7 +7,7 @@ use log::{info, warn};
 use mio::net::TcpStream;
 use x509_certificate::X509Certificate;
 use avalanche_types::ids::node;
-use avalanche_types::message::bytes_to_ip_addr;
+use avalanche_types::message::{bytes_to_ip_addr};
 use avalanche_types::proto::p2p;
 use avalanche_types::proto::p2p::Version;
 use crate::peer::ipaddr::{SignedIp, UnsignedIp};
@@ -126,11 +126,8 @@ impl TlsClient {
                 .read_exact(&mut message)
                 .unwrap();
 
-            // // TODO: Improve length removal
-            // let real_message = plaintext[4..].to_vec();
-            // let version = Message::deserialize(real_message).expect("failed to deserialize version message");
-            // info!("Received version message: {:?}", version);
-            // self.handle_version(version);
+            // TODO: Improve length extraction
+            let message = message[4..].to_vec();
             self.handle_inbound_message(&message);
 
         }
@@ -162,12 +159,12 @@ impl TlsClient {
         registry.reregister(&mut self.socket, CLIENT, interest)
     }
 
-    /// Sends a version message over the TLS connection.
-    pub fn send_version_message(&mut self, version_message: &[u8]) -> io::Result<usize> {
+    /// Sends a message over the TLS connection.
+    pub fn write_message(&mut self, message: &[u8]) -> io::Result<usize> {
         info!("Sending version message to peer");
-        self.tls_conn.writer().write_all(version_message)?;
+        self.tls_conn.writer().write_all(message)?;
         self.do_write()?; // Flush the TLS data to the socket
-        Ok(version_message.len())
+        Ok(message.len())
     }
 
 
@@ -302,11 +299,7 @@ impl TlsClient {
         Ok(())
     }
     fn handle_inbound_message(&mut self, message: &Vec<u8>) {
-        // TODO: Improve encoding
-        let real_message = message[4..].to_vec();
-        let message_ref: &[u8] = &real_message;
-
-        let p2p_msg: p2p::Message = prost::Message::decode(message_ref)
+        let p2p_msg: p2p::Message = prost::Message::decode(message.as_slice())
             .expect("failed to decode inbound message");
 
         match p2p_msg.message.unwrap() {
@@ -322,9 +315,28 @@ impl TlsClient {
             },
             p2p::message::Message::PeerList(msg) => {
                 info!("Received Peer list message");
+                for (i, claimed_port) in msg.claimed_ip_ports.iter().enumerate() {
+                    info!("Peer {}:", i);
+                    info!("Peer claimed ip: {}", bytes_to_ip_addr(claimed_port.ip_addr.to_vec()).unwrap());
+                    info!("Peer claimed port: {}", claimed_port.ip_port);
+                    info!("Peer claimed timestamp: {}", claimed_port.timestamp);
+                    info!("Peer claimed signature: {}", hex::encode(claimed_port.signature.to_vec()));
+                    info!("Peer claimed tx id: {}", hex::encode(claimed_port.tx_id.to_vec()));
+                    info!("Peer claimed x509 certificate: {}", hex::encode(claimed_port.x509_certificate.to_vec()));
+                }
+            },
+            p2p::message::Message::CompressedZstd(msg) => {
+                info!("Received CompressedZstd message");
+                let read: &mut dyn Read = &mut msg.as_ref();
+                let decompressed = zstd::stream::decode_all(read)
+                    .expect("failed to decompress zstd message");
+                self.handle_inbound_message(&decompressed);
+            },
+            p2p::message::Message::CompressedGzip(msg) => {
+                info!("Received CompressedGzip message");
             },
             _ => {
-                warn!("Received Unknown message type: {}", hex::encode(&real_message));
+                warn!("Received Unknown message type: {}", hex::encode(&message));
             }
         };
     }

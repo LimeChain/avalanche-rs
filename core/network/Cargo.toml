@@ -28,7 +28,8 @@ mio={version = "0.8.8", features=["os-poll", "net"]}
 pem = { version = "3.0.0", optional = true }
 serde = "1.0.188" # https://github.com/jcreekmore/pem-rs
 random-manager = "0.0.5"
-prost = "0.11.9"
+prost = "0.12.1"
+zstd = "0.12.4"
 
 [dev-dependencies]
 env_logger = "0.10.0"
