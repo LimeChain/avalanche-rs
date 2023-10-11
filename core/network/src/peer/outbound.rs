@@ -1,20 +1,20 @@
+use std::sync::Mutex;
 use std::{
     io::{self, Error, ErrorKind, Read, Write},
     sync::Arc,
     time::{Duration, SystemTime},
 };
-use std::sync::Mutex;
 
 use avalanche_types::ids::node;
 
+use crate::peer::ipaddr::{SignedIp, UnsignedIp};
+use crate::tls::client::{TlsClient, CLIENT};
+use avalanche_types::message;
+use avalanche_types::message::bytes_to_ip_addr;
 use log::info;
 use rustls::Certificate;
 use rustls::{ClientConfig, ClientConnection, ServerName};
 use x509_certificate::X509Certificate;
-use avalanche_types::message;
-use avalanche_types::message::bytes_to_ip_addr;
-use crate::peer::ipaddr::{SignedIp, UnsignedIp};
-use crate::tls::client::{CLIENT, TlsClient};
 
 /// ref. <https://pkg.go.dev/github.com/ava-labs/avalanchego/network/peer#Start>
 pub struct Connector {
@@ -67,8 +67,11 @@ impl Connector {
         let mut poll = mio::Poll::new().unwrap();
         let mut events = mio::Events::with_capacity(32);
         let mut unlocked = tls_client.lock().unwrap();
-        poll.registry()
-            .register(&mut unlocked.socket, CLIENT, mio::Interest::READABLE | mio::Interest::WRITABLE).unwrap();
+        poll.registry().register(
+            &mut unlocked.socket,
+            CLIENT,
+            mio::Interest::READABLE | mio::Interest::WRITABLE,
+        )?;
 
         drop(unlocked);
         // Start an event loop.

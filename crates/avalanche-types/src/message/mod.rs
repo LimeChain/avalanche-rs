@@ -1,6 +1,4 @@
 //! Definitions of messages that can be sent between nodes.
-use std::io;
-use std::io::{Error, ErrorKind};
 use std::net::IpAddr;
 
 pub mod accepted;
@@ -18,6 +16,7 @@ pub mod get_accepted_frontier;
 pub mod get_accepted_state_summary;
 pub mod get_ancestors;
 pub mod get_state_summary_frontier;
+pub mod parser;
 pub mod peerlist;
 pub mod ping;
 pub mod pong;
@@ -26,55 +25,32 @@ pub mod push_query;
 pub mod put;
 pub mod state_summary_frontier;
 pub mod version;
-pub mod parser;
 
 pub fn ip_addr_to_bytes(ip_addr: std::net::IpAddr) -> Vec<u8> {
     match ip_addr {
         std::net::IpAddr::V4(v) => {
             // "avalanchego" encodes IPv4 address as it is
             // (not compatible with IPv6, e.g., prepends 2 "0xFF"s as in Rust)
-            let octets = v.octets();
-            vec![
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, octets[0], octets[1], octets[2], octets[3],
-            ]
+            let [a, b, c, d] = v.octets();
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, a, b, c, d]
         }
         std::net::IpAddr::V6(v) => v.octets().to_vec(),
     }
 }
 
-pub fn bytes_to_ip_addr(bytes: Vec<u8>) -> io::Result<IpAddr> {
-    let bytes: [u8; 16] = match bytes.as_slice() {
-        [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p] => {
-            [
-                *a, *b, *c, *d, *e, *f, *g, *h, *i, *j, *k, *l, *m, *n, *o, *p
-            ]
-        },
-        _ => {
-            log::warn!(
-                    "Peer IP address is not 16 bytes long"
-                );
-            return Err(Error::new(ErrorKind::Other, "Peer IP address is not 16 bytes long"));
-        }
-    };
+pub fn bytes_to_ip_addr(bytes: Vec<u8>) -> Option<IpAddr> {
+    let bytes: [u8; 16] = bytes.try_into().ok()?;
 
-    let ip_addr = match IpAddr::from(bytes) {
-        IpAddr::V4(v) => IpAddr::V4(v),
-        IpAddr::V6(v) => IpAddr::V6(v),
-    };
+    let ip_addr = IpAddr::from(bytes);
 
-    Ok(ip_addr)
+    Some(ip_addr)
 }
 
 fn prepend_message_length(message: &mut Vec<u8>) {
     let length = message.len();
-    let mut length_bytes = vec![];
-
-    // Convert the length to bytes (big-endian byte order)
-    for i in (0..std::mem::size_of::<usize>()).rev() {
-        length_bytes.push(((length >> (i * 8)) & 0xFF) as u8);
-    }
+    // Explicitly turning into a u64 so that 32 bit platforms won't be different behaviour
+    let length_bytes = (length as u64).to_be_bytes();
 
     // Insert the length bytes at the beginning of the vector
     message.splice(0..0, length_bytes);
 }
-
