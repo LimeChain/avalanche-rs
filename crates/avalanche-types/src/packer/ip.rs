@@ -6,6 +6,7 @@ use std::{
 use crate::{
     errors::Result,
     packer::{self, Packer},
+    message::ip_addr_to_bytes
 };
 use crate::message::ip_addr_to_bytes;
 
@@ -105,7 +106,6 @@ fn fix_vector_size<T, const N: usize>(v: Vec<T>) -> [T; N] {
     v.try_into()
         .unwrap_or_else(|v: Vec<T>| panic!("expected vec length {} but {}", N, v.len()))
 }
-
 
 /// ref. <https://doc.rust-lang.org/std/primitive.slice.html#method.align_to>
 fn all_zeroes(d: &[u8]) -> bool {

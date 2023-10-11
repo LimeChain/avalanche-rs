@@ -1,9 +1,11 @@
-use std::io;
-use std::net::IpAddr;
-use x509_certificate::X509Certificate;
 use avalanche_types::packer::ip::IP_LEN;
 use avalanche_types::packer::Packer;
-use crate::peer::staking;
+use std::io;
+use std::net::IpAddr;
+use thiserror::Error;
+use x509_certificate::X509Certificate;
+
+use crate::peer::staking::{self, SignatureValidationError};
 
 pub struct SignedIp {
     pub unsigned_ip: UnsignedIp,
@@ -34,13 +36,24 @@ impl SignedIp {
         }
     }
 
-    pub fn verify(&self, cert: &X509Certificate) -> io::Result<()> {
+    pub fn verify(&self, cert: &X509Certificate) -> Result<(), SignedIpVerificationError> {
         let packer = Packer::new(IP_LEN + 8, 0);
-        if packer.pack_ip_with_timestamp(self.unsigned_ip.ip, self.unsigned_ip.port, self.unsigned_ip.timestamp).is_err() {
-            return Err(io::Error::new(io::ErrorKind::Other, "failed to pack ip"));
-        }
+        packer.pack_ip_with_timestamp(
+            self.unsigned_ip.ip,
+            self.unsigned_ip.port,
+            self.unsigned_ip.timestamp,
+        )?;
+
         let packed = packer.take_bytes();
         staking::check_signature(cert, packed.as_ref(), self.signature.as_ref())?;
         Ok(())
     }
+}
+
+#[derive(Error, Debug)]
+pub enum SignedIpVerificationError {
+    #[error("Failed to pack ip address")]
+    Packing(#[from] avalanche_types::errors::Error),
+    #[error("Signature was not correct")]
+    Signature(#[from] SignatureValidationError),
 }
