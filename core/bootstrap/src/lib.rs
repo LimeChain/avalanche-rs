@@ -2,7 +2,7 @@ use std::{fs::File, net::SocketAddr};
 use std::path::Path;
 use serde::Deserialize;
 
-const BOOTSTRAPPERS_FILE_PATH: &str = "genesis/bootstrappers.json";
+const BOOTSTRAPPERS_FILE_PATH: &str = "./genesis/bootstrappers.json";
 
 #[derive(Debug, Deserialize)]
 pub struct Bootstrapper {

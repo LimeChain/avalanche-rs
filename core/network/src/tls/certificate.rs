@@ -17,7 +17,6 @@ pub fn generate_certificate() -> Result<Certificate, std::io::Error> {
         &client_cert_path,
     )?;
 
-    log::info!("client cert path: {}", client_cert_path);
     Ok(Certificate {
         key_path: client_key_path,
         cert_path: client_cert_path,

@@ -39,7 +39,6 @@ impl TlsClient {
             socket: sock,
             closing: false,
             clean_closure: false,
-            received_first_message: false,
             tls_conn: rustls::ClientConnection::new(cfg, server_name).unwrap(),
             network_id,
             x509_certificate: None,
