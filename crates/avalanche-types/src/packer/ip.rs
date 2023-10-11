@@ -8,6 +8,7 @@ use crate::{
     packer::{self, Packer},
     message::ip_addr_to_bytes
 };
+use crate::message::ip_addr_to_bytes;
 
 /// All IPs (either IPv4 or IPv6) are represented as a 16-byte (IPv6) array.
 /// ref. "go/net/IP"

@@ -80,6 +80,6 @@ fn start() -> io::Result<()> {
 
     let msg = msg.serialize().expect("failed serialize");
     info!("Sending version message: {}", hex::encode(msg.clone()));
-    tls_client.lock().expect("Failed to obtain lock").send_version_message(&msg).expect("failed to write");
+    tls_client.lock().expect("Failed to obtain lock").write_message(&msg).expect("failed to write");
     Ok(())
 }
