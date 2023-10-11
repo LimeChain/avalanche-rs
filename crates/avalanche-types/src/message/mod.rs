@@ -16,7 +16,6 @@ pub mod get_accepted_frontier;
 pub mod get_accepted_state_summary;
 pub mod get_ancestors;
 pub mod get_state_summary_frontier;
-pub mod parser;
 pub mod peerlist;
 pub mod ping;
 pub mod pong;
