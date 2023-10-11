@@ -67,10 +67,6 @@ fn start() -> io::Result<()> {
 
     info!("public key is: {}", hex::encode(x509_cert.public_key_data().as_ref()));
 
-    // if verify_signature(x509_cert.public_key_data().as_ref(), packed.as_ref(), signature.as_ref()).is_err() {
-    //     panic!("failed to verify signature");
-    // }
-
     let sig_bytes: Box<[u8]> = Box::from(signature.as_ref());
     let msg = message::version::Message::default()
         .network_id(1)

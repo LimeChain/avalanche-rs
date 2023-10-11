@@ -7,7 +7,8 @@ use std::time::SystemTime;
 use crate::peer::ipaddr::{SignedIp, UnsignedIp};
 use avalanche_types::ids::node;
 use avalanche_types::message::bytes_to_ip_addr;
-use avalanche_types::message::version::Message;
+use avalanche_types::proto::p2p;
+use avalanche_types::proto::p2p::Version;
 use mio::net::TcpStream;
 use x509_certificate::X509Certificate;
 
@@ -83,14 +84,14 @@ impl TlsClient {
                 if error.kind() == io::ErrorKind::WouldBlock {
                     return;
                 }
-                println!("TLS read error: {:?}", error);
+                info!("TLS read error: {:?}", error);
                 self.closing = true;
                 return;
             }
 
             // If we're ready but there's no data: EOF.
             Ok(0) => {
-                println!("EOF");
+                info!("EOF");
                 self.closing = true;
                 self.clean_closure = true;
                 return;
@@ -105,7 +106,7 @@ impl TlsClient {
         let io_state = match self.tls_conn.process_new_packets() {
             Ok(io_state) => io_state,
             Err(err) => {
-                println!("TLS error: {:?}", err);
+                info!("TLS error: {:?}", err);
                 self.closing = true;
                 return;
             }
@@ -116,15 +117,19 @@ impl TlsClient {
         //
         // Read it and then write it to stdout.
         if io_state.plaintext_bytes_to_read() > 0 {
-            let mut plaintext = vec![0u8; io_state.plaintext_bytes_to_read()];
-            self.tls_conn.reader().read_exact(&mut plaintext).unwrap();
+            let mut message = vec![0u8; io_state.plaintext_bytes_to_read()];
+            self.tls_conn
+                .reader()
+                .read_exact(&mut message)
+                .unwrap();
 
-            // TODO: Improve length removal
-            let real_message = plaintext[4..].to_vec();
-            let version =
-                Message::deserialize(real_message).expect("failed to deserialize version message");
-            info!("Received version message: {:?}", version);
-            self.handle_version(version);
+            // // TODO: Improve length removal
+            // let real_message = plaintext[4..].to_vec();
+            // let version = Message::deserialize(real_message).expect("failed to deserialize version message");
+            // info!("Received version message: {:?}", version);
+            // self.handle_version(version);
+            self.handle_inbound_message(&message);
+
         }
 
         // If that fails, the peer might have started a clean TLS-level
@@ -156,10 +161,9 @@ impl TlsClient {
 
     /// Sends a version message over the TLS connection.
     pub fn send_version_message(&mut self, version_message: &[u8]) -> io::Result<usize> {
-        info!("Writing version message to stream");
+        info!("Sending version message to peer");
         self.tls_conn.writer().write_all(version_message)?;
         self.do_write()?; // Flush the TLS data to the socket
-        info!("Flushed message to stream");
         Ok(version_message.len())
     }
 
@@ -182,17 +186,18 @@ impl TlsClient {
         self.closing
     }
 
-    pub fn handle_version(&mut self, msg: Message) {
+
+    pub fn handle_version(&mut self, msg: Version)  {
         // TODO: There must be a better(earlier) time to extract the certificate data
         if self.handle_certificate().is_err() {
             warn!("Failed to handle peer certificate");
             return;
         }
-
-        if msg.msg.network_id != self.network_id {
+        if msg.network_id != self.network_id {
             warn!(
                 "Peer network ID {} doesn't match our network ID {}",
-                msg.msg.network_id, self.network_id
+                msg.network_id,
+                self.network_id
             );
             return;
         }
@@ -201,8 +206,7 @@ impl TlsClient {
             .duration_since(SystemTime::UNIX_EPOCH)
             .expect("unexpected None duration_since")
             .as_secs();
-
-        let time_diff = msg.msg.my_time.abs_diff(now_unix);
+        let time_diff = msg.my_time.abs_diff(now_unix);
         if time_diff > 60 {
             warn!("Peer time is off by {} seconds", time_diff);
             return;
@@ -210,21 +214,23 @@ impl TlsClient {
 
         // Skip version compatibility check for now
 
-        if msg.msg.my_version_time.abs_diff(now_unix) > 60 {
+        if msg.my_version_time.abs_diff(now_unix) > 60 {
             warn!(
                 "Peer version time is off by {} seconds",
-                msg.msg.my_version_time.abs_diff(now_unix)
+                msg.my_version_time.abs_diff(now_unix)
             );
             return;
         }
 
         // Skip subnet handling for now
-        if msg.msg.ip_addr.len() != 16 {
-            warn!("Peer IP address is not 16 bytes long");
+        if msg.ip_addr.len() != 16 {
+            warn!(
+                "Peer IP address is not 16 bytes long"
+            );
             return;
         }
 
-        let ip_addr = match bytes_to_ip_addr(msg.msg.ip_addr.to_vec()) {
+        let ip_addr = match bytes_to_ip_addr(msg.ip_addr.to_vec()) {
             Some(ip_addr) => ip_addr,
             None => {
                 warn!("Peer IP address is invalid");
@@ -232,10 +238,18 @@ impl TlsClient {
             }
         };
 
+        self.ip = Some(SignedIp::new(
+            UnsignedIp::new(
+                ip_addr,
+                msg.ip_port as u16,
+                msg.my_version_time
+            ),
+            msg.sig.to_vec(),
+        ));
         if let Some(cert) = &self.x509_certificate {
             let ip = SignedIp::new(
-                UnsignedIp::new(ip_addr, msg.msg.ip_port as u16, msg.msg.my_version_time),
-                msg.msg.sig.to_vec(),
+                UnsignedIp::new(ip_addr, msg.ip_port as u16, msg.my_version_time),
+                msg.sig.to_vec(),
             );
 
             match ip.verify(cert) {
@@ -278,6 +292,33 @@ impl TlsClient {
         self.peer_cert = Some(peer_cert.clone());
         self.x509_certificate = Some(x509_certificate);
         Ok(())
+    }
+    fn handle_inbound_message(&mut self, message: &Vec<u8>) {
+        // TODO: Improve encoding
+        let real_message = message[4..].to_vec();
+        let message_ref: &[u8] = &real_message;
+
+        let p2p_msg: p2p::Message = prost::Message::decode(message_ref)
+            .expect("failed to decode inbound message");
+
+        match p2p_msg.message.unwrap() {
+            p2p::message::Message::Ping(msg) => {
+                info!("Received Ping message");
+            },
+            p2p::message::Message::Pong(msg) => {
+                info!("Received Pong message");
+            },
+            p2p::message::Message::Version(msg) => {
+                info!("Received Version message");
+                self.handle_version(msg);
+            },
+            p2p::message::Message::PeerList(msg) => {
+                info!("Received Peer list message");
+            },
+            _ => {
+                warn!("Received Unknown message type: {}", hex::encode(&real_message));
+            }
+        };
     }
 }
 impl Write for TlsClient {

@@ -85,7 +85,6 @@ impl Connector {
                 // determine for which socket the event is.
                 match event.token() {
                     CLIENT => {
-                        info!("client event!");
                         let mut tls_client = tls_client.lock().unwrap();
                         tls_client.ready(event);
                         tls_client.reregister(poll.registry())?;
