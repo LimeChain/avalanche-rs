@@ -1,10 +1,5 @@
 use std::error::Error;
-use std::net::IpAddr;
-use std::ptr::null;
-use std::time::SystemTime;
-use avalanche_types::message;
-use avalanche_types::message::bytes_to_ip_addr;
-use crate::peer::ipaddr::{SignedIp, UnsignedIp};
+use crate::peer::ipaddr::{SignedIp};
 
 pub mod inbound;
 pub mod outbound;

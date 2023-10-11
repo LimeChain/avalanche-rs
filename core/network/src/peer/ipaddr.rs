@@ -1,6 +1,5 @@
 use avalanche_types::packer::ip::IP_LEN;
 use avalanche_types::packer::Packer;
-use std::io;
 use std::net::IpAddr;
 use thiserror::Error;
 use x509_certificate::X509Certificate;

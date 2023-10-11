@@ -7,11 +7,8 @@ use std::{
 
 use avalanche_types::ids::node;
 
-use crate::peer::ipaddr::{SignedIp, UnsignedIp};
+use crate::peer::ipaddr::{SignedIp};
 use crate::tls::client::{TlsClient, CLIENT};
-use avalanche_types::message;
-use avalanche_types::message::bytes_to_ip_addr;
-use log::info;
 use rustls::Certificate;
 use rustls::{ClientConfig, ClientConnection, ServerName};
 use x509_certificate::X509Certificate;

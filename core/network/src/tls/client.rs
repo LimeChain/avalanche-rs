@@ -20,7 +20,6 @@ pub struct TlsClient {
     pub socket: TcpStream,
     closing: bool,
     clean_closure: bool,
-    received_first_message: bool,
     pub tls_conn: rustls::ClientConnection,
     network_id: u32,
     x509_certificate: Option<X509Certificate>,

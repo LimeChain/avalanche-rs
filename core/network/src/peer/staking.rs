@@ -1,9 +1,8 @@
 use crypto::{
     ecdsa,
-    error::{self, CryptoError},
+    error::{CryptoError},
     rsa,
 };
-use std::io;
 use thiserror::Error;
 use x509_certificate::X509Certificate;
 
