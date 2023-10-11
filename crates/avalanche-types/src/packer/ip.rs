@@ -6,6 +6,7 @@ use std::{
 use crate::{
     errors::Result,
     packer::{self, Packer},
+    message::ip_addr_to_bytes
 };
 
 /// All IPs (either IPv4 or IPv6) are represented as a 16-byte (IPv6) array.
@@ -104,21 +105,6 @@ fn fix_vector_size<T, const N: usize>(v: Vec<T>) -> [T; N] {
     v.try_into()
         .unwrap_or_else(|v: Vec<T>| panic!("expected vec length {} but {}", N, v.len()))
 }
-
-pub fn ip_addr_to_bytes(ip_addr: std::net::IpAddr) -> Vec<u8> {
-    match ip_addr {
-        std::net::IpAddr::V4(v) => {
-            // "avalanchego" encodes IPv4 address as it is
-            // (not compatible with IPv6, e.g., prepends 2 "0xFF"s as in Rust)
-            let octets = v.octets();
-            vec![
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, octets[0], octets[1], octets[2], octets[3],
-            ]
-        }
-        std::net::IpAddr::V6(v) => v.octets().to_vec(),
-    }
-}
-
 
 /// ref. <https://doc.rust-lang.org/std/primitive.slice.html#method.align_to>
 fn all_zeroes(d: &[u8]) -> bool {
