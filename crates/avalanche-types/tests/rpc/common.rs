@@ -94,7 +94,7 @@ impl TestHandler {
         }).unwrap();
 
         module.register_blocking_method("bar", |params, _| {
-            let params: Option<[[String; 1]; 1]> = dbg!(params).parse().unwrap();
+            let params: Option<[[String; 1]; 1]> = params.parse().unwrap();
 
             serde_json::Value::String(format!(
                 "Hello, {}, from bar",

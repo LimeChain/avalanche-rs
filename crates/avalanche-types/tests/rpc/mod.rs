@@ -41,7 +41,7 @@ async fn test_http_service() {
     let json_str = std::str::from_utf8(foo_resp.body());
     assert!(json_str.is_ok());
 
-    let foo_json_resp: JsonResp<Value> = serde_json::from_str(dbg!(json_str.unwrap())).unwrap();
+    let foo_json_resp: JsonResp<Value> = serde_json::from_str(json_str.unwrap()).unwrap();
 
     match foo_json_resp.payload {
         ResponsePayload::Result(_) => {}
