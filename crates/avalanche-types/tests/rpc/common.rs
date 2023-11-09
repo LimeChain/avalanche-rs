@@ -113,20 +113,22 @@ impl Handle for TestHandler {
         req: &Bytes,
         _headers: &[Element],
     ) -> std::io::Result<(Bytes, Vec<Element>)> {
-        let de_request: Request = serde_json::from_slice(req).map_err(|e| {
+        let request: Request = serde_json::from_slice(req).map_err(|e| {
             io::Error::new(
                 io::ErrorKind::Other,
                 format!("failed to deserialize request: {e}"),
             )
         })?;
         
-        let bruh = (de_request.params,);
+        // Unfortunately, module.call has a trait bound for ToRpcParams which for some reason is only implemented
+        // for types which only serialize to objects or arrays, this is a issue that requires changes to jsonrpsee
+        let valid_to_rpc_params = (request.params,);
 
-        match self.module.call::<_, Value>(&de_request.method, bruh).await {
+        match self.module.call::<_, Value>(&request.method, valid_to_rpc_params).await {
             Ok(resp) => {
                 let owned = Cow::<'static, Value>::Owned(resp);
                 let payload = ResponsePayload::Result(owned);
-                let resp = Response::new(payload, de_request.id);
+                let resp = Response::new(payload, request.id);
 
                 Ok((Bytes::from(serde_json::to_string(&resp).unwrap()), Vec::new()))
             },
