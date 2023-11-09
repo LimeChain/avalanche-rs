@@ -120,8 +120,9 @@ impl Handle for TestHandler {
             )
         })?;
         
-        // Unfortunately, module.call has a trait bound for ToRpcParams which for some reason is only implemented
-        // for types which only serialize to objects or arrays, this is a issue that requires changes to jsonrpsee
+        // module.call has a trait bound of ToRpcParams for this value
+        // The trait is not implemented for `T: Serialize`, but is for the tuple `(T0,): Serialize`
+        // This means we have to wrap request.params as a tuple (which serde will also turn into an array)
         let valid_to_rpc_params = (request.params,);
 
         match self.module.call::<_, Value>(&request.method, valid_to_rpc_params).await {
