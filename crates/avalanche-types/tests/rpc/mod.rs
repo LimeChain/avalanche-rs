@@ -59,7 +59,6 @@ async fn test_http_service() {
     assert!(json_str.is_ok());
     let bar_json_resp: JsonResp<Value> = serde_json::from_str(json_str.unwrap()).unwrap();
 
-
     match bar_json_resp.payload {
         ResponsePayload::Result(_) => {}
         ResponsePayload::Error(f) => panic!("inner resp invalid: {f}"),

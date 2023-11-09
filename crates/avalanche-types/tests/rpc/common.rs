@@ -14,8 +14,8 @@ use avalanche_types::{
     subnet::rpc::{http::handle::Handle, utils::grpc::default_server},
 };
 use bytes::Bytes;
-use jsonrpsee_types::{TwoPointZero, Id, Request, Response, ResponsePayload};
 use jsonrpsee_core::server::RpcModule;
+use jsonrpsee_types::{Id, Request, Response, ResponsePayload, TwoPointZero};
 use serde_json::Value;
 use tokio::net::TcpListener;
 use tokio_stream::wrappers::TcpListenerStream;
@@ -86,21 +86,22 @@ pub struct TestHandler {
 }
 
 impl TestHandler {
-    pub fn new() -> Self {        
+    pub fn new() -> Self {
         let mut module = RpcModule::new(());
 
-        module.register_blocking_method("foo", |_, _| {
-            serde_json::Value::String("Hello, from foo".to_string())
-        }).unwrap();
+        module
+            .register_blocking_method("foo", |_, _| {
+                serde_json::Value::String("Hello, from foo".to_string())
+            })
+            .unwrap();
 
-        module.register_blocking_method("bar", |params, _| {
-            let params: Option<[[String; 1]; 1]> = params.parse().unwrap();
+        module
+            .register_blocking_method("bar", |params, _| {
+                let params: Option<[[String; 1]; 1]> = params.parse().unwrap();
 
-            serde_json::Value::String(format!(
-                "Hello, {}, from bar",
-                params.unwrap()[0][0]
-            ))
-        }).unwrap();
+                serde_json::Value::String(format!("Hello, {}, from bar", params.unwrap()[0][0]))
+            })
+            .unwrap();
 
         Self { module }
     }
@@ -119,24 +120,28 @@ impl Handle for TestHandler {
                 format!("failed to deserialize request: {e}"),
             )
         })?;
-        
+
         // module.call has a trait bound of ToRpcParams for this value
         // The trait is not implemented for `T: Serialize`, but is for the tuple `(T0,): Serialize`
         // This means we have to wrap request.params as a tuple (which serde will also turn into an array)
         let valid_to_rpc_params = (request.params,);
 
-        match self.module.call::<_, Value>(&request.method, valid_to_rpc_params).await {
+        match self
+            .module
+            .call::<_, Value>(&request.method, valid_to_rpc_params)
+            .await
+        {
             Ok(resp) => {
                 let owned = Cow::<'static, Value>::Owned(resp);
                 let payload = ResponsePayload::Result(owned);
                 let resp = Response::new(payload, request.id);
 
-                Ok((Bytes::from(serde_json::to_string(&resp).unwrap()), Vec::new()))
-            },
-            Err(err) => Err(io::Error::new(
-                io::ErrorKind::Other,
-                err,
-            )),
+                Ok((
+                    Bytes::from(serde_json::to_string(&resp).unwrap()),
+                    Vec::new(),
+                ))
+            }
+            Err(err) => Err(io::Error::new(io::ErrorKind::Other, err)),
         }
     }
 }
