@@ -10,7 +10,7 @@ use std::{
 use chrono::{DateTime, Utc};
 use http::{Request, Response};
 use hyper::Body;
-use jsonrpc_core::futures::FutureExt;
+use futures::FutureExt;
 use tokio::sync::broadcast::Receiver;
 use tonic::{
     body::BoxBody,
