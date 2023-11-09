@@ -121,14 +121,12 @@ impl Handle for TestHandler {
             )
         })?;
 
-        // module.call has a trait bound of ToRpcParams for this value
+        // module.call has a trait bound of ToRpcParams for params
         // The trait is not implemented for `T: Serialize`, but is for the tuple `(T0,): Serialize`
         // This means we have to wrap request.params as a tuple (which serde will also turn into an array)
-        let valid_to_rpc_params = (request.params,);
-
         match self
             .module
-            .call::<_, Value>(&request.method, valid_to_rpc_params)
+            .call::<_, Value>(&request.method, (request.params,))
             .await
         {
             Ok(resp) => {
